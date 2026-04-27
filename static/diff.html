@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>snprs — diff</title>
+    <style>
+        :root {
+            --bg: #0e1014;
+            --panel: #161a22;
+            --fg: #e6e8eb;
+            --muted: #8a92a3;
+            --accent: #7cc4ff;
+            --green: #4ec38a;
+            --red: #e06f6f;
+            --gray: #555c6b;
+            --missing: #2a2f3a;
+            --border: #2a2f3a;
+            --hit-a: #2a3140;
+            --hit-b: #1d222d;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg);
+            color: var(--fg);
+            font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+
+        header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            color: var(--muted);
+        }
+
+        nav a {
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 12px;
+            margin-left: 14px;
+        }
+
+        nav a.active,
+        nav a:hover {
+            color: var(--accent);
+        }
+
+        main {
+            padding: 16px 20px 60px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .pickers {
+            display: flex;
+            gap: 14px;
+            align-items: center;
+            margin-bottom: 18px;
+        }
+
+        select {
+            background: var(--panel);
+            color: var(--fg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 10px;
+            font: inherit;
+            font-size: 13px;
+        }
+
+        .summary {
+            display: flex;
+            gap: 28px;
+            padding: 14px 16px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 18px;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .stat-label {
+            color: var(--muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .stat-value.same {
+            color: var(--green);
+        }
+
+        .stat-value.different {
+            color: var(--red);
+        }
+
+        .track-wrap {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px 16px;
+            margin-bottom: 18px;
+        }
+
+        .track-wrap h2 {
+            margin: 0 0 10px 0;
+            font-size: 12px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        .track-canvas {
+            display: block;
+            width: 100%;
+            height: 80px;
+            cursor: crosshair;
+            image-rendering: pixelated;
+        }
+
+        .track-labels {
+            position: relative;
+            height: 14px;
+            margin-top: 4px;
+            font-size: 10px;
+            color: var(--muted);
+        }
+
+        .track-tooltip {
+            position: absolute;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 10;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            min-width: 180px;
+        }
+
+        .track-tooltip .rsid {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .track-tooltip .geno-row {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 4px;
+        }
+
+        .track-tooltip .geno-row .who {
+            color: var(--muted);
+        }
+
+        .track-legend {
+            display: flex;
+            gap: 14px;
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 8px;
+        }
+
+        .track-legend .swatch {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+            margin-right: 4px;
+            vertical-align: middle;
+        }
+
+        .chr-table-wrap {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px 16px;
+            margin-bottom: 18px;
+        }
+
+        .chr-table-wrap h2 {
+            margin: 0 0 10px 0;
+            font-size: 12px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 6px 10px;
+            font-size: 13px;
+        }
+
+        th {
+            color: var(--muted);
+            font-weight: 500;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        tbody tr:nth-child(odd) {
+            background: var(--hit-b);
+        }
+
+        tbody tr:nth-child(even) {
+            background: var(--hit-a);
+        }
+
+        td.num {
+            text-align: left;
+            font-variant-numeric: tabular-nums;
+        }
+
+        td.rsid {
+            color: var(--accent);
+        }
+
+        td.geno {
+            font-weight: 600;
+        }
+
+        td.same {
+            color: var(--green);
+        }
+
+        td.different {
+            color: var(--red);
+        }
+
+        td.nocall,
+        td.missing {
+            color: var(--gray);
+        }
+
+        .filters {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+
+        .pagination {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 12px;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        button {
+            background: var(--panel);
+            color: var(--fg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 10px;
+            font: inherit;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        button:hover:not(:disabled) {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .empty {
+            color: var(--muted);
+            padding: 20px;
+            text-align: center;
+        }
+
+        .bar {
+            width: 80px;
+            height: 8px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            background: var(--red);
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>snprs</h1>
+        <span style="color: var(--muted); font-size: 12px;">compare two exports</span>
+        <nav style="margin-left: auto;">
+            <a href="/">search</a>
+            <a href="/diff.html" class="active">diff</a>
+        </nav>
+    </header>
+    <main>
+        <div class="pickers">
+            <label>A: <select id="picker-a"></select></label>
+            <label>B: <select id="picker-b"></select></label>
+            <span id="pair-status" style="color: var(--muted); font-size: 12px;"></span>
+        </div>
+
+        <div id="summary" class="summary" style="display:none;"></div>
+
+        <div id="track-wrap" class="track-wrap" style="display:none;">
+            <h2>genome track — each column shows the proportion of same/different/nocall in that slice</h2>
+            <canvas id="track" class="track-canvas"></canvas>
+            <div id="track-labels" class="track-labels"></div>
+            <div class="track-legend">
+                <span><span class="swatch" style="background: var(--green)"></span>same</span>
+                <span><span class="swatch" style="background: var(--red)"></span>different</span>
+                <span><span class="swatch" style="background: var(--gray)"></span>nocall</span>
+                <span><span class="swatch" style="background: var(--missing)"></span>missing</span>
+            </div>
+        </div>
+
+        <div id="chr-table-wrap" class="chr-table-wrap" style="display:none;">
+            <h2>per chromosome</h2>
+            <table id="chr-table"></table>
+        </div>
+
+        <div id="rows-wrap" style="display:none;">
+            <div class="filters">
+                <label>chr: <select id="filter-chr">
+                        <option value="">all</option>
+                    </select></label>
+                <label>status:
+                    <select id="filter-status">
+                        <option value="different">different</option>
+                        <option value="same">same</option>
+                        <option value="nocall">nocall</option>
+                        <option value="missing">missing</option>
+                        <option value="all">all</option>
+                    </select>
+                </label>
+            </div>
+            <div id="rows"></div>
+            <div class="pagination">
+                <button id="prev-page">prev</button>
+                <span id="page-info"></span>
+                <button id="next-page">next</button>
+            </div>
+        </div>
+    </main>
+
+    <div id="tooltip" class="track-tooltip" style="display:none;"></div>
+
+    <script>
+        const pickerA = document.getElementById('picker-a');
+        const pickerB = document.getElementById('picker-b');
+        const pairStatus = document.getElementById('pair-status');
+        const summary = document.getElementById('summary');
+        const trackWrap = document.getElementById('track-wrap');
+        const trackCanvas = document.getElementById('track');
+        const trackLabels = document.getElementById('track-labels');
+        const chrTableWrap = document.getElementById('chr-table-wrap');
+        const chrTable = document.getElementById('chr-table');
+        const rowsWrap = document.getElementById('rows-wrap');
+        const rowsDiv = document.getElementById('rows');
+        const filterChr = document.getElementById('filter-chr');
+        const filterStatus = document.getElementById('filter-status');
+        const prevBtn = document.getElementById('prev-page');
+        const nextBtn = document.getElementById('next-page');
+        const pageInfo = document.getElementById('page-info');
+        const tooltip = document.getElementById('tooltip');
+
+        const PAGE_SIZE = 100;
+        let state = {
+            a: null, b: null,
+            track: null,
+            boundaries: null,
+            offset: 0,
+        };
+
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        async function loadPeople() {
+            const res = await fetch('/api/people');
+            const data = await res.json();
+            if (!data.people || data.people.length < 2) {
+                pairStatus.textContent = 'need at least 2 people imported';
+                return;
+            }
+            for (const p of data.people) {
+                pickerA.append(new Option(p, p));
+                pickerB.append(new Option(p, p));
+            }
+            pickerA.value = data.people[0];
+            pickerB.value = data.people[1];
+            onPairChange();
+        }
+
+        pickerA.addEventListener('change', onPairChange);
+        pickerB.addEventListener('change', onPairChange);
+
+        async function onPairChange() {
+            const a = pickerA.value;
+            const b = pickerB.value;
+            if (a === b) {
+                pairStatus.textContent = 'pick two different people';
+                hideAll();
+                return;
+            }
+            state.a = a;
+            state.b = b;
+            state.offset = 0;
+            pairStatus.textContent = 'loading…';
+
+            try {
+                await Promise.all([loadStats(a, b), loadTrack(a, b)]);
+                await loadRows();
+                pairStatus.textContent = '';
+            } catch (e) {
+                pairStatus.textContent = 'error: ' + e.message;
+            }
+        }
+
+        function hideAll() {
+            summary.style.display = 'none';
+            trackWrap.style.display = 'none';
+            chrTableWrap.style.display = 'none';
+            rowsWrap.style.display = 'none';
+        }
+
+        async function loadStats(a, b) {
+            const res = await fetch(`/api/diff/stats?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`);
+            if (!res.ok) throw new Error('stats http ' + res.status);
+            const s = await res.json();
+
+            const total = s.total_compared;
+            const pctDiff = total > 0 ? ((s.different / total) * 100).toFixed(2) : '0';
+            const pctSame = total > 0 ? ((s.same / total) * 100).toFixed(2) : '0';
+
+            summary.innerHTML = `
+      <div class="stat"><span class="stat-label">total compared</span><span class="stat-value">${total.toLocaleString()}</span></div>
+      <div class="stat"><span class="stat-label">same</span><span class="stat-value same">${s.same.toLocaleString()} <span style="font-size:12px; color: var(--muted)">(${pctSame}%)</span></span></div>
+      <div class="stat"><span class="stat-label">different</span><span class="stat-value different">${s.different.toLocaleString()} <span style="font-size:12px; color: var(--muted)">(${pctDiff}%)</span></span></div>
+      <div class="stat"><span class="stat-label">nocall</span><span class="stat-value">${s.nocall.toLocaleString()}</span></div>
+      <div class="stat"><span class="stat-label">missing</span><span class="stat-value">${s.missing.toLocaleString()}</span></div>
+    `;
+            summary.style.display = '';
+
+            const chrSorted = [...s.by_chr].sort(chrCompare);
+            const rows = chrSorted.map(c => {
+                const tot = c.same + c.different;
+                const pct = tot > 0 ? ((c.different / tot) * 100).toFixed(1) : '—';
+                const pctNum = tot > 0 ? (c.different / tot) * 100 : 0;
+                const barW = pctNum.toFixed(1);
+                return `<tr>
+        <td>${escapeHtml(c.chromosome)}</td>
+        <td class="num">${c.same.toLocaleString()}</td>
+        <td class="num">${c.different.toLocaleString()}</td>
+        <td class="num">${c.nocall.toLocaleString()}</td>
+        <td class="num">${pct}${pct === '—' ? '' : '%'}</td>
+        <td><div class="bar"><div class="bar-fill" style="width:${barW}%"></div></div></td>
+      </tr>`;
+            }).join('');
+            chrTable.innerHTML = `
+      <thead><tr><th>chr</th><th class="num">same</th><th class="num">different</th><th class="num">nocall</th><th class="num">% diff</th><th>0—100%</th></tr></thead>
+      <tbody>${rows}</tbody>
+    `;
+            chrTableWrap.style.display = '';
+
+            filterChr.innerHTML = '<option value="">all</option>' + chrSorted.map(c => `<option value="${c.chromosome}">${escapeHtml(c.chromosome)}</option>`).join('');
+        }
+
+        function chrCompare(a, b) {
+            return chrSortKey(a.chromosome) - chrSortKey(b.chromosome);
+        }
+        function chrSortKey(c) {
+            const n = parseInt(c, 10);
+            return isNaN(n) ? 999 : n;
+        }
+
+        async function loadTrack(a, b) {
+            const res = await fetch(`/api/diff/track?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`);
+            if (!res.ok) throw new Error('track http ' + res.status);
+            const headerRaw = res.headers.get('x-chr-boundaries') || '[]';
+            state.boundaries = JSON.parse(headerRaw);
+            const buf = await res.arrayBuffer();
+            state.track = new Uint8Array(buf);
+            trackWrap.style.display = '';
+            requestAnimationFrame(drawTrack);
+        }
+
+        // proportional stacked bars: each column shows count ratios within its slice.
+        // bottom = green (same), middle = gray (nocall), top = red (different).
+        // missing is rendered as the dark "remainder" — typically zero for two people.
+        function drawTrack() {
+            const dpr = window.devicePixelRatio || 1;
+            const cssW = trackCanvas.clientWidth;
+            const cssH = 80;
+            trackCanvas.width = Math.floor(cssW * dpr);
+            trackCanvas.height = Math.floor(cssH * dpr);
+            trackCanvas.style.height = cssH + 'px';
+            const ctx = trackCanvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+            ctx.scale(dpr, dpr);
+
+            const total = state.track.length;
+            if (total === 0 || cssW === 0) return;
+
+            // background = missing color so any unfilled px shows as missing
+            ctx.fillStyle = getCss('--missing');
+            ctx.fillRect(0, 0, cssW, cssH);
+
+            const colorSame = getCss('--green');
+            const colorDiff = getCss('--red');
+            const colorNc = getCss('--gray');
+
+            for (let x = 0; x < cssW; x++) {
+                const start = Math.floor((x / cssW) * total);
+                const end = Math.max(start + 1, Math.floor(((x + 1) / cssW) * total));
+                let same = 0, diff = 0, nc = 0, miss = 0;
+                for (let i = start; i < end; i++) {
+                    const v = state.track[i];
+                    if (v === 0) same++;
+                    else if (v === 1) diff++;
+                    else if (v === 2) nc++;
+                    else miss++;
+                }
+                const n = same + diff + nc + miss;
+                if (n === 0) continue;
+
+                // heights, bottom-up: same -> nocall -> different. missing is the remainder, shown by bg.
+                const hSame = (same / n) * cssH;
+                const hNc = (nc / n) * cssH;
+                const hDiff = (diff / n) * cssH;
+
+                let y = cssH;
+                // green at the bottom
+                ctx.fillStyle = colorSame;
+                ctx.fillRect(x, y - hSame, 1, hSame);
+                y -= hSame;
+                // gray nocall
+                ctx.fillStyle = colorNc;
+                ctx.fillRect(x, y - hNc, 1, hNc);
+                y -= hNc;
+                // red diff on top
+                ctx.fillStyle = colorDiff;
+                ctx.fillRect(x, y - hDiff, 1, hDiff);
+                // remaining (missing) stays as bg
+            }
+
+            // separators on canvas
+            trackLabels.innerHTML = '';
+            for (const [chr, start, len] of state.boundaries) {
+                const xEnd = ((start + len) / total) * cssW;
+                ctx.strokeStyle = '#0e1014';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(xEnd, 0);
+                ctx.lineTo(xEnd, cssH);
+                ctx.stroke();
+            }
+
+            // labels in absolutely-positioned spans, centered on each chr's pixel midpoint.
+            // skip labels that don't have room (smaller than ~14px slot).
+            trackLabels.style.position = 'relative';
+            trackLabels.style.height = '14px';
+            for (const [chr, start, len] of state.boundaries) {
+                const xStart = (start / total) * cssW;
+                const xEnd = ((start + len) / total) * cssW;
+                const w = xEnd - xStart;
+                if (w < 12) continue; // not enough room
+                const mid = (xStart + xEnd) / 2;
+                const span = document.createElement('span');
+                span.textContent = chr;
+                span.style.position = 'absolute';
+                span.style.left = `${mid}px`;
+                span.style.transform = 'translateX(-50%)';
+                span.style.borderRight = 'none';
+                span.style.padding = '2px 0';
+                trackLabels.appendChild(span);
+            }
+        }
+
+        function getCss(name) {
+            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        }
+
+        let hoverDebounce = null;
+        let hoverInflight = null;
+        trackCanvas.addEventListener('mousemove', (e) => {
+            const rect = trackCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const cssW = rect.width;
+            const total = state.track ? state.track.length : 0;
+            if (!total) return;
+
+            const index = Math.min(total - 1, Math.max(0, Math.floor((x / cssW) * total)));
+
+            tooltip.style.display = 'block';
+            tooltip.style.left = (e.clientX + 12) + 'px';
+            tooltip.style.top = (e.clientY + 12) + 'px';
+            tooltip.innerHTML = '<span style="color: var(--muted)">loading…</span>';
+
+            clearTimeout(hoverDebounce);
+            hoverDebounce = setTimeout(async () => {
+                if (hoverInflight) hoverInflight.abort();
+                const ctrl = new AbortController();
+                hoverInflight = ctrl;
+                try {
+                    const res = await fetch(`/api/diff/at?a=${encodeURIComponent(state.a)}&b=${encodeURIComponent(state.b)}&index=${index}`, { signal: ctrl.signal });
+                    if (!res.ok) throw new Error('http ' + res.status);
+                    const r = await res.json();
+                    renderTooltip(r);
+                } catch (e) {
+                    if (e.name === 'AbortError') return;
+                    tooltip.innerHTML = '<span style="color: var(--red)">err: ' + escapeHtml(e.message) + '</span>';
+                }
+            }, 30);
+        });
+        trackCanvas.addEventListener('mouseleave', () => {
+            tooltip.style.display = 'none';
+        });
+
+        function renderTooltip(r) {
+            const aGeno = (r.a_allele1 === '\u0000' ? '—' : r.a_allele1) + (r.a_allele2 === '\u0000' ? '' : r.a_allele2);
+            const bGeno = (r.b_allele1 === '\u0000' ? '—' : r.b_allele1) + (r.b_allele2 === '\u0000' ? '' : r.b_allele2);
+            tooltip.innerHTML = `
+      <div class="rsid">${escapeHtml(r.rsid)}</div>
+      <div style="color: var(--muted); font-size: 11px;">chr ${escapeHtml(r.chromosome)} : ${r.position.toLocaleString()}</div>
+      <div class="geno-row"><span class="who">${escapeHtml(state.a)}</span><span>${escapeHtml(aGeno)}</span></div>
+      <div class="geno-row"><span class="who">${escapeHtml(state.b)}</span><span>${escapeHtml(bGeno)}</span></div>
+      <div style="margin-top: 4px; font-size: 11px; color: var(--muted);">${escapeHtml(r.status.toLowerCase())}</div>
+    `;
+        }
+
+        filterChr.addEventListener('change', () => { state.offset = 0; loadRows(); });
+        filterStatus.addEventListener('change', () => { state.offset = 0; loadRows(); });
+        prevBtn.addEventListener('click', () => { state.offset = Math.max(0, state.offset - PAGE_SIZE); loadRows(); });
+        nextBtn.addEventListener('click', () => { state.offset += PAGE_SIZE; loadRows(); });
+
+        async function loadRows() {
+            if (!state.a || !state.b) return;
+            const params = new URLSearchParams({
+                a: state.a, b: state.b,
+                status: filterStatus.value,
+                offset: state.offset, limit: PAGE_SIZE,
+            });
+            if (filterChr.value) params.set('chr', filterChr.value);
+            const res = await fetch('/api/diff?' + params.toString());
+            if (!res.ok) { rowsDiv.innerHTML = '<div class="empty">error</div>'; return; }
+            const data = await res.json();
+            renderRows(data.rows);
+            rowsWrap.style.display = '';
+            pageInfo.textContent = `rows ${state.offset + 1}–${state.offset + data.rows.length}`;
+            prevBtn.disabled = state.offset === 0;
+            nextBtn.disabled = data.rows.length < PAGE_SIZE;
+        }
+
+        function renderRows(rows) {
+            if (!rows.length) {
+                rowsDiv.innerHTML = '<div class="empty">no rows</div>';
+                return;
+            }
+            const html = rows.map(r => {
+                const aGeno = (r.a_allele1 === '\u0000' ? '—' : r.a_allele1) + (r.a_allele2 === '\u0000' ? '' : r.a_allele2);
+                const bGeno = (r.b_allele1 === '\u0000' ? '—' : r.b_allele1) + (r.b_allele2 === '\u0000' ? '' : r.b_allele2);
+                const cls = r.status.toLowerCase();
+                return `<tr>
+        <td class="rsid">${escapeHtml(r.rsid)}</td>
+        <td>${escapeHtml(r.chromosome)}</td>
+        <td class="num">${r.position.toLocaleString()}</td>
+        <td class="geno">${escapeHtml(aGeno)}</td>
+        <td class="geno">${escapeHtml(bGeno)}</td>
+        <td class="${cls}">${escapeHtml(r.status.toLowerCase())}</td>
+      </tr>`;
+            }).join('');
+            rowsDiv.innerHTML = `
+      <table>
+        <thead><tr><th>rsid</th><th>chr</th><th class="num">pos</th><th>${escapeHtml(state.a)}</th><th>${escapeHtml(state.b)}</th><th>status</th></tr></thead>
+        <tbody>${html}</tbody>
+      </table>
+    `;
+        }
+
+        let resizeTimer = null;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => { if (state.track) drawTrack(); }, 100);
+        });
+
+        loadPeople();
+    </script>
+</body>
+
+</html>

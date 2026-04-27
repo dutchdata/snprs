@@ -1,83 +1,196 @@
 <!doctype html>
 <html lang="en">
+
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>snprs — snp search</title>
-<style>
-  :root {
-    --bg: #0e1014;
-    --panel: #161a22;
-    --fg: #e6e8eb;
-    --muted: #8a92a3;
-    --accent: #7cc4ff;
-    --hit-a: #2a3140;
-    --hit-b: #1d222d;
-    --border: #2a2f3a;
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
-  header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
-  header h1 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.5px; color: var(--muted); }
-  main { padding: 16px 20px 60px; max-width: 1100px; margin: 0 auto; }
-  .search {
-    width: 100%;
-    background: var(--panel);
-    color: var(--fg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px 16px;
-    font: inherit;
-    font-size: 16px;
-    outline: none;
-  }
-  .search:focus { border-color: var(--accent); }
-  .controls { display: flex; gap: 14px; align-items: center; margin-top: 10px; color: var(--muted); font-size: 12px; }
-  .controls label { cursor: pointer; user-select: none; }
-  .meta { margin-top: 14px; color: var(--muted); font-size: 12px; min-height: 18px; }
-  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-  th, td { text-align: left; padding: 8px 10px; }
-  th { color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
-  tbody tr:nth-child(odd) { background: var(--hit-b); }
-  tbody tr:nth-child(even) { background: var(--hit-a); }
-  td.rsid { color: var(--accent); }
-  td.geno { font-weight: 600; }
-  .empty { color: var(--muted); margin-top: 24px; text-align: center; }
-  kbd { background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; font-size: 11px; color: var(--muted); }
-</style>
-</head>
-<body>
-<header>
-  <h1>snprs</h1>
-  <span style="color: var(--muted); font-size: 12px;">paste an rsid — e.g. <kbd>rs3131972</kbd></span>
-</header>
-<main>
-  <input id="q" class="search" placeholder="rs..." autocomplete="off" autofocus />
-  <div class="controls">
-    <label><input type="checkbox" id="exact" /> exact match only</label>
-    <span id="count"></span>
-  </div>
-  <div class="meta" id="meta"></div>
-  <div id="results"></div>
-</main>
-<script>
-  const q = document.getElementById('q');
-  const exact = document.getElementById('exact');
-  const results = document.getElementById('results');
-  const meta = document.getElementById('meta');
-  const count = document.getElementById('count');
-
-  let inflight = null;
-  let debounce = null;
-  let lastQuery = '';
-
-  function render(hits) {
-    if (!hits.length) {
-      results.innerHTML = '<div class="empty">no hits</div>';
-      count.textContent = '';
-      return;
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>snprs — snp search</title>
+  <style>
+    :root {
+      --bg: #0e1014;
+      --panel: #161a22;
+      --fg: #e6e8eb;
+      --muted: #8a92a3;
+      --accent: #7cc4ff;
+      --hit-a: #2a3140;
+      --hit-b: #1d222d;
+      --border: #2a2f3a;
     }
-    const rows = hits.map(h => `
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+    }
+
+    nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 12px;
+      margin-left: 14px;
+    }
+
+    nav a.active,
+    nav a:hover {
+      color: var(--accent);
+    }
+
+    main {
+      padding: 16px 20px 60px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .search {
+      width: 100%;
+      background: var(--panel);
+      color: var(--fg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font: inherit;
+      font-size: 16px;
+      outline: none;
+    }
+
+    .search:focus {
+      border-color: var(--accent);
+    }
+
+    .controls {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .controls label {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .meta {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 12px;
+      min-height: 18px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 8px 10px;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 500;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tbody tr:nth-child(odd) {
+      background: var(--hit-b);
+    }
+
+    tbody tr:nth-child(even) {
+      background: var(--hit-a);
+    }
+
+    td.rsid {
+      color: var(--accent);
+    }
+
+    td.geno {
+      font-weight: 600;
+    }
+
+    .empty {
+      color: var(--muted);
+      margin-top: 24px;
+      text-align: center;
+    }
+
+    kbd {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>snprs</h1>
+    <span style="color: var(--muted); font-size: 12px;">paste an rsid — e.g. <kbd>rs3131972</kbd></span>
+    <nav style="margin-left: auto;">
+      <a href="/" class="active">search</a>
+      <a href="/diff.html">diff</a>
+    </nav>
+  </header>
+  <main>
+    <input id="q" class="search" placeholder="rs..." autocomplete="off" autofocus />
+    <div class="controls">
+      <label><input type="checkbox" id="exact" /> exact match only</label>
+      <span id="count"></span>
+    </div>
+    <div class="meta" id="meta"></div>
+    <div id="results"></div>
+  </main>
+  <script>
+    const q = document.getElementById('q');
+    const exact = document.getElementById('exact');
+    const results = document.getElementById('results');
+    const meta = document.getElementById('meta');
+    const count = document.getElementById('count');
+
+    let inflight = null;
+    let debounce = null;
+    let lastQuery = '';
+
+    function render(hits) {
+      if (!hits.length) {
+        results.innerHTML = '<div class="empty">no hits</div>';
+        count.textContent = '';
+        return;
+      }
+      const rows = hits.map(h => `
       <tr>
         <td>${escapeHtml(h.person)}</td>
         <td class="rsid">${escapeHtml(h.rsid)}</td>
@@ -86,56 +199,57 @@
         <td class="geno">${escapeHtml(h.allele1)}${escapeHtml(h.allele2)}</td>
       </tr>
     `).join('');
-    results.innerHTML = `
+      results.innerHTML = `
       <table>
         <thead><tr><th>person</th><th>rsid</th><th>chr</th><th>pos</th><th>geno</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     `;
-    count.textContent = `${hits.length} hit${hits.length === 1 ? '' : 's'}`;
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  }
-
-  async function run() {
-    const term = q.value.trim();
-    if (term === lastQuery) return;
-    lastQuery = term;
-
-    if (!term) {
-      results.innerHTML = '';
-      count.textContent = '';
-      meta.textContent = '';
-      return;
+      count.textContent = `${hits.length} hit${hits.length === 1 ? '' : 's'}`;
     }
 
-    if (inflight) inflight.abort();
-    const ctrl = new AbortController();
-    inflight = ctrl;
-
-    const t0 = performance.now();
-    try {
-      const url = `/api/search?q=${encodeURIComponent(term)}&exact=${exact.checked}&limit=200`;
-      const res = await fetch(url, { signal: ctrl.signal });
-      if (!res.ok) throw new Error('http ' + res.status);
-      const data = await res.json();
-      const dt = (performance.now() - t0).toFixed(1);
-      meta.textContent = `query "${term}" in ${dt}ms`;
-      render(data.hits);
-    } catch (e) {
-      if (e.name === 'AbortError') return;
-      meta.textContent = 'error: ' + e.message;
-      results.innerHTML = '';
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
-  }
 
-  q.addEventListener('input', () => {
-    clearTimeout(debounce);
-    debounce = setTimeout(run, 40);
-  });
-  exact.addEventListener('change', () => { lastQuery = ''; run(); });
-</script>
+    async function run() {
+      const term = q.value.trim();
+      if (term === lastQuery) return;
+      lastQuery = term;
+
+      if (!term) {
+        results.innerHTML = '';
+        count.textContent = '';
+        meta.textContent = '';
+        return;
+      }
+
+      if (inflight) inflight.abort();
+      const ctrl = new AbortController();
+      inflight = ctrl;
+
+      const t0 = performance.now();
+      try {
+        const url = `/api/search?q=${encodeURIComponent(term)}&exact=${exact.checked}&limit=200`;
+        const res = await fetch(url, { signal: ctrl.signal });
+        if (!res.ok) throw new Error('http ' + res.status);
+        const data = await res.json();
+        const dt = (performance.now() - t0).toFixed(1);
+        meta.textContent = `query "${term}" in ${dt}ms`;
+        render(data.hits);
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+        meta.textContent = 'error: ' + e.message;
+        results.innerHTML = '';
+      }
+    }
+
+    q.addEventListener('input', () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(run, 40);
+    });
+    exact.addEventListener('change', () => { lastQuery = ''; run(); });
+  </script>
 </body>
+
 </html>

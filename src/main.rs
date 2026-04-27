@@ -6,6 +6,7 @@ use std::path::Path;
 use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
 
+mod differ;
 mod importer;
 mod model;
 mod parser;
@@ -18,7 +19,9 @@ use store::Store;
 #[actix_web::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
         .init();
 
     let bind = std::env::var("SNPRS_BIND").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
@@ -29,7 +32,9 @@ async fn main() -> Result<()> {
 
     importer::import_dir(&store, Path::new(&exports_dir))?;
 
-    let state = web::Data::new(AppState { store: store.clone() });
+    let state = web::Data::new(AppState {
+        store: store.clone(),
+    });
 
     tracing::info!("listening on http://{}", bind);
 
@@ -39,6 +44,11 @@ async fn main() -> Result<()> {
             .wrap(middleware::Compress::default())
             .wrap(Cors::permissive())
             .service(routes::search)
+            .service(routes::people)
+            .service(routes::diff_stats)
+            .service(routes::diff)
+            .service(routes::diff_track)
+            .service(routes::diff_at)
             .service(Files::new("/", "static").index_file("index.html"))
     })
     .bind(&bind)?
