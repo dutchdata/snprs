@@ -2,6 +2,10 @@
 
 instant rsid search across multiple AncestryDNA exports. local, lmdb-backed, single binary.
 
+![main screen](screenshots/main_screen_1.webp)
+
+![main screen](screenshots/main_screen_2.webp)
+
 ## setup
 
 1. drop your AncestryDNA.txt files into `exports/`, named per person:
