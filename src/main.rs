@@ -12,6 +12,7 @@ mod model;
 mod parser;
 mod routes;
 mod store;
+mod zygosity;
 
 use routes::AppState;
 use store::Store;
@@ -49,6 +50,8 @@ async fn main() -> Result<()> {
             .service(routes::diff)
             .service(routes::diff_track)
             .service(routes::diff_at)
+            .service(routes::zygosity)
+            .service(routes::zygosity_all)
             .service(Files::new("/", "static").index_file("index.html"))
     })
     .bind(&bind)?

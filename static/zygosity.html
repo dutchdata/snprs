@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>snprs — zygosity</title>
+    <style>
+        :root {
+            --bg: #0e1014;
+            --panel: #161a22;
+            --fg: #e6e8eb;
+            --muted: #8a92a3;
+            --accent: #7cc4ff;
+            --hom: #c79bff;
+            --het: #f5b342;
+            --gray: #555c6b;
+            --border: #2a2f3a;
+            --hit-a: #2a3140;
+            --hit-b: #1d222d;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg);
+            color: var(--fg);
+            font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+
+        header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            color: var(--muted);
+        }
+
+        nav a {
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 12px;
+            margin-left: 14px;
+        }
+
+        nav a.active,
+        nav a:hover {
+            color: var(--accent);
+        }
+
+        main {
+            padding: 16px 20px 60px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .person-card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px 16px;
+            margin-bottom: 18px;
+        }
+
+        .person-card h2 {
+            margin: 0 0 12px 0;
+            font-size: 14px;
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .stats-row {
+            display: flex;
+            gap: 28px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .stat-label {
+            color: var(--muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .stat-value.hom {
+            color: var(--hom);
+        }
+
+        .stat-value.het {
+            color: var(--het);
+        }
+
+        .ratio-bar {
+            width: 100%;
+            height: 16px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+        }
+
+        .ratio-bar .seg {
+            height: 100%;
+        }
+
+        .ratio-bar .seg.hom {
+            background: var(--hom);
+        }
+
+        .ratio-bar .seg.het {
+            background: var(--het);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 6px 10px;
+            font-size: 13px;
+        }
+
+        th {
+            color: var(--muted);
+            font-weight: 500;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        tbody tr:nth-child(odd) {
+            background: var(--hit-b);
+        }
+
+        tbody tr:nth-child(even) {
+            background: var(--hit-a);
+        }
+
+        td.num {
+            text-align: left;
+            font-variant-numeric: tabular-nums;
+        }
+
+        td.hom {
+            color: var(--hom);
+        }
+
+        td.het {
+            color: var(--het);
+        }
+
+        .mini-bar {
+            display: inline-block;
+            width: 140px;
+            height: 8px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            overflow: hidden;
+            vertical-align: middle;
+        }
+
+        .mini-bar .fill {
+            height: 100%;
+            background: var(--het);
+        }
+
+        .empty {
+            color: var(--muted);
+            padding: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>snprs</h1>
+        <span style="color: var(--muted); font-size: 12px;">homozygous vs heterozygous, per person</span>
+        <nav style="margin-left: auto;">
+            <a href="/">search</a>
+            <a href="/diff.html">diff</a>
+            <a href="/zygosity.html" class="active">zygosity</a>
+        </nav>
+    </header>
+    <main>
+        <div id="content"></div>
+    </main>
+
+    <script>
+        const content = document.getElementById('content');
+
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function chrSortKey(c) {
+            const n = parseInt(c, 10);
+            return isNaN(n) ? 999 : n;
+        }
+
+        async function load() {
+            try {
+                const res = await fetch('/api/zygosity/all');
+                if (!res.ok) throw new Error('http ' + res.status);
+                const data = await res.json();
+                if (!data.stats || data.stats.length === 0) {
+                    content.innerHTML = '<div class="empty">no people imported yet</div>';
+                    return;
+                }
+                content.innerHTML = data.stats.map(renderPerson).join('');
+            } catch (e) {
+                content.innerHTML = `<div class="empty">error: ${escapeHtml(e.message)}</div>`;
+            }
+        }
+
+        function renderPerson(s) {
+            const tot = s.total;
+            const hom = s.homozygous;
+            const het = s.heterozygous;
+            const homPct = tot > 0 ? ((hom / tot) * 100) : 0;
+            const hetPct = tot > 0 ? ((het / tot) * 100) : 0;
+            const ratio = het > 0 ? (hom / het).toFixed(3) : '∞';
+
+            const chrs = [...s.by_chr].sort((a, b) => chrSortKey(a.chromosome) - chrSortKey(b.chromosome));
+            const rows = chrs.map(c => {
+                const t = c.homozygous + c.heterozygous;
+                const hp = t > 0 ? ((c.heterozygous / t) * 100) : 0;
+                return `<tr>
+        <td>${escapeHtml(c.chromosome)}</td>
+        <td class="num hom">${c.homozygous.toLocaleString()}</td>
+        <td class="num het">${c.heterozygous.toLocaleString()}</td>
+        <td class="num">${c.nocall.toLocaleString()}</td>
+        <td class="num">${t > 0 ? hp.toFixed(1) + '%' : '—'}</td>
+        <td><div class="mini-bar"><div class="fill" style="width:${hp.toFixed(1)}%"></div></div></td>
+      </tr>`;
+            }).join('');
+
+            return `
+      <div class="person-card">
+        <h2>${escapeHtml(s.person)}</h2>
+        <div class="stats-row">
+          <div class="stat"><span class="stat-label">total called</span><span class="stat-value">${tot.toLocaleString()}</span></div>
+          <div class="stat"><span class="stat-label">homozygous</span><span class="stat-value hom">${hom.toLocaleString()} <span style="font-size:12px;color:var(--muted)">(${homPct.toFixed(2)}%)</span></span></div>
+          <div class="stat"><span class="stat-label">heterozygous</span><span class="stat-value het">${het.toLocaleString()} <span style="font-size:12px;color:var(--muted)">(${hetPct.toFixed(2)}%)</span></span></div>
+          <div class="stat"><span class="stat-label">hom : het ratio</span><span class="stat-value">${ratio}</span></div>
+          <div class="stat"><span class="stat-label">nocall</span><span class="stat-value">${s.nocall.toLocaleString()}</span></div>
+        </div>
+        <div class="ratio-bar" title="hom ${homPct.toFixed(1)}% / het ${hetPct.toFixed(1)}%">
+          <div class="seg hom" style="width:${homPct}%"></div>
+          <div class="seg het" style="width:${hetPct}%"></div>
+        </div>
+        <table>
+          <thead><tr>
+            <th>chr</th>
+            <th class="num">hom</th>
+            <th class="num">het</th>
+            <th class="num">nocall</th>
+            <th class="num">% het</th>
+            <th>0—100% het</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+        }
+
+        load();
+    </script>
+</body>
+
+</html>

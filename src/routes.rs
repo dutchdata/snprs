@@ -152,12 +152,6 @@ pub async fn diff(state: web::Data<AppState>, q: web::Query<DiffQuery>) -> impl 
     }
 }
 
-// ----- new endpoints for the viz -----
-
-// returns binary blob: one byte per snp in canonical (chr, pos) order.
-// 0=same, 1=different, 2=nocall, 3=missing.
-// chr boundaries are returned as a custom header `x-chr-boundaries` containing
-// json array of [chr_label, start_index, length] tuples.
 #[get("/api/diff/track")]
 pub async fn diff_track(state: web::Data<AppState>, q: web::Query<PairQuery>) -> impl Responder {
     let store = state.store.clone();
@@ -238,6 +232,49 @@ pub async fn diff_at(state: web::Data<AppState>, q: web::Query<AtQuery>) -> impl
         Ok(Ok(None)) => HttpResponse::NotFound().body("index out of range"),
         Ok(Err(e)) => {
             tracing::error!("diff_at error: {:?}", e);
+            HttpResponse::InternalServerError().body("failed")
+        }
+        Err(e) => {
+            tracing::error!("blocking error: {:?}", e);
+            HttpResponse::InternalServerError().body("internal error")
+        }
+    }
+}
+
+// ----- zygosity -----
+
+#[derive(Deserialize)]
+pub struct PersonQuery {
+    pub person: String,
+}
+
+#[get("/api/zygosity")]
+pub async fn zygosity(state: web::Data<AppState>, q: web::Query<PersonQuery>) -> impl Responder {
+    let store = state.store.clone();
+    let person = q.person.clone();
+    let res = web::block(move || store.get_zygosity_stats(&person)).await;
+    match res {
+        Ok(Ok(Some(s))) => HttpResponse::Ok().json(s),
+        Ok(Ok(None)) => HttpResponse::NotFound().body("no zygosity stats for that person"),
+        Ok(Err(e)) => {
+            tracing::error!("zygosity error: {:?}", e);
+            HttpResponse::InternalServerError().body("failed")
+        }
+        Err(e) => {
+            tracing::error!("blocking error: {:?}", e);
+            HttpResponse::InternalServerError().body("internal error")
+        }
+    }
+}
+
+#[get("/api/zygosity/all")]
+pub async fn zygosity_all(state: web::Data<AppState>) -> impl Responder {
+    let store = state.store.clone();
+    let res = web::block(move || store.get_all_zygosity()).await;
+    match res {
+        Ok(Ok(stats)) => HttpResponse::Ok().json(serde_json::json!({ "stats": stats })),
+        Ok(Err(e)) => {
+            tracing::error!("zygosity_all error: {:?}", e);
             HttpResponse::InternalServerError().body("failed")
         }
         Err(e) => {

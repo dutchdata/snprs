@@ -1,3 +1,4 @@
 /target
 /lmdb_*
 /exports/
+.DS_Store

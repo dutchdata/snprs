@@ -5,6 +5,7 @@ use std::sync::Arc;
 use crate::differ;
 use crate::parser;
 use crate::store::Store;
+use crate::zygosity;
 
 pub fn import_dir(store: &Arc<Store>, dir: &Path) -> Result<()> {
     if !dir.exists() {
@@ -45,14 +46,23 @@ pub fn import_dir(store: &Arc<Store>, dir: &Path) -> Result<()> {
         any_imported = true;
     }
 
+    let people = store.list_people()?;
+
     if any_imported {
-        tracing::info!("recomputing diffs");
-        differ::recompute_all(store)?;
+        tracing::info!("recomputing zygosity");
+        zygosity::recompute_all(store)?;
+        if people.len() >= 2 {
+            tracing::info!("recomputing diffs");
+            differ::recompute_all(store)?;
+        }
     } else {
-        // if no new imports but diff_stats is empty (e.g. first run with old db), backfill.
-        let people = store.list_people()?;
+        // backfill if missing
+        if !people.is_empty() && store.get_zygosity_stats(&people[0])?.is_none() {
+            tracing::info!("zygosity missing — recomputing");
+            zygosity::recompute_all(store)?;
+        }
         if people.len() >= 2 && store.get_diff_stats(&people[0], &people[1])?.is_none() {
-            tracing::info!("no new imports but diffs missing — recomputing");
+            tracing::info!("diffs missing — recomputing");
             differ::recompute_all(store)?;
         }
     }

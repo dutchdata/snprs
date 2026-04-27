@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use lmdb::{Cursor, Database, DatabaseFlags, Environment, Transaction, WriteFlags};
 use std::path::Path;
 
-use crate::model::{DiffRow, DiffStats, Snp, SnpHit};
+use crate::model::{DiffRow, DiffStats, Snp, SnpHit, ZygosityStats};
 
 pub struct Store {
     env: Environment,
@@ -11,6 +11,7 @@ pub struct Store {
     meta: Database,
     diff: Database,
     diff_stats: Database,
+    zygosity_stats: Database,
 }
 
 const ZERO: u8 = 0;
@@ -30,6 +31,7 @@ impl Store {
         let meta = env.create_db(Some("meta"), DatabaseFlags::empty())?;
         let diff = env.create_db(Some("diff"), DatabaseFlags::empty())?;
         let diff_stats = env.create_db(Some("diff_stats"), DatabaseFlags::empty())?;
+        let zygosity_stats = env.create_db(Some("zygosity_stats"), DatabaseFlags::empty())?;
 
         Ok(Self {
             env,
@@ -38,6 +40,7 @@ impl Store {
             meta,
             diff,
             diff_stats,
+            zygosity_stats,
         })
     }
 
@@ -172,6 +175,8 @@ impl Store {
         Ok(hits)
     }
 
+    // ----- diff -----
+
     pub fn clear_diffs(&self) -> Result<()> {
         let mut txn = self.env.begin_rw_txn()?;
         txn.clear_db(self.diff)?;
@@ -259,7 +264,6 @@ impl Store {
         Ok(out)
     }
 
-    // walk every diff row for a pair in canonical (chr, pos) order.
     pub fn for_each_diff_row<F: FnMut(&DiffRow) -> Result<()>>(
         &self,
         a: &str,
@@ -288,7 +292,6 @@ impl Store {
         Ok(())
     }
 
-    // get the Nth diff row (in canonical order). used by hover.
     pub fn get_diff_at_index(&self, a: &str, b: &str, index: usize) -> Result<Option<DiffRow>> {
         let txn = self.env.begin_ro_txn()?;
         let (a, b) = canon_pair(a, b);
@@ -314,6 +317,48 @@ impl Store {
             i += 1;
         }
         Ok(None)
+    }
+
+    // ----- zygosity -----
+
+    pub fn clear_zygosity(&self) -> Result<()> {
+        let mut txn = self.env.begin_rw_txn()?;
+        txn.clear_db(self.zygosity_stats)?;
+        txn.commit()?;
+        Ok(())
+    }
+
+    pub fn put_zygosity_stats(&self, person: &str, stats: &ZygosityStats) -> Result<()> {
+        let mut txn = self.env.begin_rw_txn()?;
+        let val = bitcode::encode(stats);
+        txn.put(
+            self.zygosity_stats,
+            &person.as_bytes(),
+            &val,
+            WriteFlags::empty(),
+        )?;
+        txn.commit()?;
+        Ok(())
+    }
+
+    pub fn get_zygosity_stats(&self, person: &str) -> Result<Option<ZygosityStats>> {
+        let txn = self.env.begin_ro_txn()?;
+        match txn.get(self.zygosity_stats, &person.as_bytes()) {
+            Ok(v) => Ok(Some(bitcode::decode(v)?)),
+            Err(lmdb::Error::NotFound) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub fn get_all_zygosity(&self) -> Result<Vec<ZygosityStats>> {
+        let people = self.list_people()?;
+        let mut out = Vec::with_capacity(people.len());
+        for p in people {
+            if let Some(s) = self.get_zygosity_stats(&p)? {
+                out.push(s);
+            }
+        }
+        Ok(out)
     }
 }
 
