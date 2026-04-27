@@ -1,4 +1,3 @@
 /target
 /lmdb_*
 /exports/
-Cargo.lock
