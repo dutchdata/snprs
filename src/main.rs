@@ -21,9 +21,9 @@ async fn main() -> Result<()> {
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
         .init();
 
-    let bind = std::env::var("SNIPS_BIND").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
-    let lmdb_path = std::env::var("SNIPS_LMDB").unwrap_or_else(|_| "lmdb_snps".to_string());
-    let exports_dir = std::env::var("SNIPS_EXPORTS").unwrap_or_else(|_| "exports".to_string());
+    let bind = std::env::var("SNPRS_BIND").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
+    let lmdb_path = std::env::var("SNPRS_LMDB").unwrap_or_else(|_| "lmdb_snps".to_string());
+    let exports_dir = std::env::var("SNPRS_EXPORTS").unwrap_or_else(|_| "exports".to_string());
 
     let store = Arc::new(Store::open(Path::new(&lmdb_path))?);
 

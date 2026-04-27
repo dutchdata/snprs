@@ -1,4 +1,4 @@
 /target
 /lmdb_*
-/exports/*.txt
+/exports/
 Cargo.lock
